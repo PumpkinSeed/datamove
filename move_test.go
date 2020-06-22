@@ -6,8 +6,9 @@ import (
 	"time"
 )
 
+var connStr = "test:test@tcp(127.0.0.1:3306)/test?parseTime=true"
+
 func TestFetch(t *testing.T) {
-	connStr := "fluidpay:fluidpay@tcp(127.0.0.1:3306)/fluidpay?parseTime=true"
 	db, err := Connect(Database{
 		Driver:    "mysql",
 		Conn:      connStr,
@@ -31,7 +32,6 @@ func TestFetch(t *testing.T) {
 
 func TestMove(t *testing.T) {
 	mes := time.Now()
-	connStr := "fluidpay:fluidpay@tcp(127.0.0.1:3306)/fluidpay?parseTime=true"
 	err := Move(Settings{
 		Destination: Database{"mysql", connStr, "users2"},
 		Source: Database{"mysql", connStr, "users"},
@@ -43,7 +43,6 @@ func TestMove(t *testing.T) {
 }
 
 func TestBuildInsert(t *testing.T) {
-	connStr := "fluidpay:fluidpay@tcp(127.0.0.1:3306)/fluidpay?parseTime=true"
 	db, err := Connect(Database{
 		Driver:    "mysql",
 		Conn:      connStr,
@@ -70,7 +69,6 @@ func TestBuildInsert(t *testing.T) {
 
 
 func BenchmarkFetch(b *testing.B) {
-	connStr := "fluidpay:fluidpay@tcp(127.0.0.1:3306)/fluidpay?parseTime=true"
 	db, err := Connect(Database{
 		Driver:    "mysql",
 		Conn:      connStr,
