@@ -3,6 +3,7 @@ package datamove
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -32,7 +33,7 @@ func Move(s Settings) error {
 		return err
 	}
 
-	data, err := Fetch(srcConn, s.Source)
+	data, err := Fetch(srcConn, s.Source, "")
 	if err != nil {
 		return err
 	}
@@ -48,48 +49,34 @@ func Connect(d Database) (*sqlx.DB, error) {
 	return sqlx.Open(d.Driver, d.Conn)
 }
 
-func Fetch(db *sqlx.DB, d Database) ([]map[string]interface{}, error) {
+func Fetch(db *sqlx.DB, d Database, data interface{}) ([]map[string]interface{}, error) {
+	// @TODO check data is a pointer
 	if db == nil {
 		return nil, errors.New("db is nil")
 	}
 
+	var resultSet []map[string]interface{}
 	var sqlQ = fmt.Sprintf("SELECT * FROM %s", d.TableName)
-	rows, err := db.Query(sqlQ)
+	rows, err := db.Queryx(sqlQ)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var resultSet []map[string]interface{}
-	cols, _ := rows.Columns()
 	for rows.Next() {
-		// Create a slice of interface{}'s to represent each column,
-		// and a second slice to contain pointers to each item in the columns slice.
-		columns := make([]interface{}, len(cols))
-		columnPointers := make([]interface{}, len(cols))
-		for i, _ := range columns {
-			columnPointers[i] = &columns[i]
-		}
-
-		// Scan the result into the column pointers...
-		if err := rows.Scan(columnPointers...); err != nil {
+		err := rows.StructScan(data)
+		if err != nil {
 			return nil, err
 		}
-
-		// Create our map, and retrieve the value for each column from the pointers slice,
-		// storing it in the map with the name of the column as the key.
-		m := make(map[string]interface{})
-		for i, colName := range cols {
-			val := columnPointers[i].(*interface{})
-			m[colName] = *val
+		rv := reflect.Indirect(reflect.ValueOf(data))
+		rt := rv.Type()
+		var resultSetSub = make(map[string]interface{})
+		for i := 0; i < rt.NumField(); i++ {
+			if v, ok := rt.Field(i).Tag.Lookup("db"); !ok {
+				return nil, errors.New("missing db field tag")
+			} else {
+				resultSetSub[v] = rv.Field(i).Interface()
+			}
 		}
-
-		// Outputs: map[columnName:value columnName2:value2 columnName3:value3 ...]
-		resultSet = append(resultSet, m)
-	}
-	err = rows.Err()
-	if err != nil {
-		return nil, err
+		resultSet = append(resultSet, resultSetSub)
 	}
 
 	return resultSet, nil
