@@ -3,12 +3,15 @@ package datamove
 import (
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
 	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 )
+
+var debug = false
 
 type Settings struct {
 	Source                 Database
@@ -56,7 +59,10 @@ func Fetch(db *sqlx.DB, d Database, data interface{}) ([]map[string]interface{},
 	}
 
 	var resultSet []map[string]interface{}
-	var sqlQ = fmt.Sprintf("SELECT * FROM %s", d.TableName)
+	var sqlQ = fmt.Sprintf("SELECT * FROM `%s`", d.TableName)
+	if debug {
+		log.Println(sqlQ)
+	}
 	rows, err := db.Queryx(sqlQ)
 	if err != nil {
 		return nil, err
@@ -88,6 +94,9 @@ func Load(db *sqlx.DB, d Database, data []map[string]interface{}) error {
 		return err
 	}
 	insertStmt := buildInsert(d.TableName, data)
+	if strings.Contains(insertStmt, "::error::") {
+		return errors.New(insertStmt)
+	}
 
 	for _, row := range data {
 		if _, err := tx.NamedExec(insertStmt, row); err != nil {
@@ -102,8 +111,12 @@ func Load(db *sqlx.DB, d Database, data []map[string]interface{}) error {
 	return nil
 }
 
+func SetDebug(d bool) {
+	debug = d
+}
+
 func buildInsert(tableName string, data []map[string]interface{}) string {
-	template := "INSERT INTO %s (%s) VALUES (%s);"
+	template := "INSERT INTO `%s` (%s) VALUES (%s);"
 	if len(data) > 0 {
 		var cols []string
 		var dataFields []string
@@ -112,12 +125,16 @@ func buildInsert(tableName string, data []map[string]interface{}) string {
 			dataFields = append(dataFields, fmt.Sprintf(":%s", col))
 		}
 
-		return fmt.Sprintf(
+		insert := fmt.Sprintf(
 			template,
 			tableName,
 			strings.Join(cols, ", "),
 			strings.Join(dataFields, ", "),
 		)
+		if debug {
+			log.Println(insert)
+		}
+		return insert
 	}
-	return ""
+	return "::error:: no data found"
 }
